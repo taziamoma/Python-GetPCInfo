@@ -4,22 +4,6 @@ from datetime import datetime
 from multiprocessing import Process, freeze_support
 
 
-def get_wifi_pass():
-    data = subprocess.check_output(['netsh', 'wlan', 'show', 'profiles']).decode('utf-8').split('\n')
-    wifis = [line.split(':')[1][1:-1] for line in data if "All User Profile" in line]
-
-    for wifi in wifis:
-        results = subprocess.check_output(['netsh', 'wlan', 'show', 'profile', wifi, 'key=clear']).decode(
-            'utf-8').split('\n')
-        results = [line.split(':')[1][1:-1] for line in results if "Key Content" in line]
-        try:
-            print(f'Name: {wifi}, Password: {results[0]}')
-        except IndexError:
-            print(print(f'Name: {wifi}, Password: Cannot be read!'))
-
-    return data
-
-
 def f():
     pass
 
@@ -64,28 +48,29 @@ def get_hd():
 
 
 def get_gpu():
-    gpus = GPUtil.getGPUs()
-    list_gpus = []
-    for gpu in gpus:
-        gpu_id = gpu.id
-        gpu_name = gpu.name
-        return gpu_name
+    w = wmi.WMI()
+    try:
+        gpu = w.win32_VideoController()[0].name
+        if gpu != '':
+            return gpu
+        else:
+            return None
+    except AttributeError:
+        return None
+    # gpus = GPUtil.getGPUs()
+    # list_gpus = []
+    # for gpu in gpus:
+    #     gpu_id = gpu.id
+    #     gpu_name = gpu.name
+    #     return gpu_name
 
 
 def get_os():
-    platform_details = platform.platform()
-    if platform_details.__contains__("Windows-10"):
-        key = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion"
-        val = r"ReleaseID"
+    system_name = platform.system()
+    system_version = platform.release()
+    system_build = platform.version().split('.')[2]
 
-        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key) as key:
-            releaseId = int(winreg.QueryValueEx(key, val)[0])
-
-        platform_details = releaseId
-        message = "Windows 10 {}".format(platform_details)
-    else:
-        message = platform_details
-    return message
+    return "{} {} {}".format(system_name, system_version, system_build)
 
 
 def get_cpu():
@@ -96,15 +81,20 @@ def get_motherboard_serial():
     try:
         os_type = sys.platform.lower()
         if "win" in os_type:
-            #command = "wmic baseboard get product,Manufacturer,version,serialnumber"
+            # command = "wmic baseboard get product,Manufacturer,version,serialnumber"
             serial_number = "wmic baseboard get serialnumber"
             motherboard_name = "wmic baseboard get product"
             manufacturer = "wmic baseboard get Manufacturer"
 
-
-            serial_number = (os.popen(serial_number).read().replace("\n", "").replace("     ", "").replace("SerialNumber", "").replace("  ", ""))
-            motherboard_name = (os.popen(motherboard_name).read().replace("\n", "").replace("     ","").replace("Product  ", "").replace("  ", ""))
-            manufacturer = (os.popen(manufacturer).read().replace("\n", "").replace("Manufacturer           ", "").replace("  ", ""))
+            serial_number = (
+                os.popen(serial_number).read().replace("\n", "").replace("     ", "").replace("SerialNumber",
+                                                                                              "").replace("  ", ""))
+            motherboard_name = (
+                os.popen(motherboard_name).read().replace("\n", "").replace("     ", "").replace("Product  ",
+                                                                                                 "").replace("  ", ""))
+            manufacturer = (
+                os.popen(manufacturer).read().replace("\n", "").replace("Manufacturer           ", "").replace("  ",
+                                                                                                               ""))
 
         motherboard_details = [serial_number, motherboard_name, manufacturer]
 
@@ -114,7 +104,8 @@ def get_motherboard_serial():
     except Exception:
         return "None"
 
-def get_dell_servicetag():
+
+def get_service_tag():
     try:
         computer = wmi.WMI()
         bios_info = computer.Win32_SystemEnclosure()
@@ -122,50 +113,6 @@ def get_dell_servicetag():
             return info.SerialNumber
     except Exception:
         return "None"
-
-
-# get windows key
-def decode_key(rpk):
-    rpkOffset = 52
-    i = 28
-    szPossibleChars = "BCDFGHJKMPQRTVWXY2346789"
-    szProductKey = ""
-
-    while i >= 0:
-        dwAccumulator = 0
-        j = 14
-        while j >= 0:
-            dwAccumulator = dwAccumulator * 256
-            d = rpk[j + rpkOffset]
-            if isinstance(d, str):
-                d = ord(d)
-            dwAccumulator = d + dwAccumulator
-            rpk[j + rpkOffset] = int(dwAccumulator / 24) if int(dwAccumulator / 24) <= 255 else 255
-            dwAccumulator = dwAccumulator % 24
-            j = j - 1
-        i = i - 1
-        szProductKey = szPossibleChars[dwAccumulator] + szProductKey
-
-        if ((29 - i) % 6) == 0 and i != -1:
-            i = i - 1
-            szProductKey = "-" + szProductKey
-    return szProductKey
-
-
-def get_key_from_reg_location(key, value='DigitalProductID'):
-    arch_keys = [0, winreg.KEY_WOW64_32KEY, winreg.KEY_WOW64_64KEY]
-    for arch in arch_keys:
-        try:
-            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key, 0, winreg.KEY_READ | arch)
-            value, type = winreg.QueryValueEx(key, value)
-            # Return the first match
-            return decode_key(list(value))
-        except (FileNotFoundError, TypeError) as e:
-            pass
-
-
-def get_windows_product_key_from_reg():
-    return get_key_from_reg_location('SOFTWARE\Microsoft\Windows NT\CurrentVersion')
 
 
 def get_windows_product_key_from_wmi():
@@ -182,81 +129,53 @@ def get_windows_product_key_from_wmi():
 
 def get_windows_key():
     try:
-        if __name__ == '__main__':
-            # print('Windows Key from WMI: %s' % get_windows_product_key_from_wmi())
-            return get_windows_product_key_from_reg()
+        return get_windows_product_key_from_wmi()
     except Exception:
         return "None"
+
 
 def get_wifi():
+    wifi_keys = {}
     try:
-        # getting meta data
-        meta_data = subprocess.check_output(['netsh', 'wlan', 'show', 'profiles'])
-
-        # decoding meta data
-        data = meta_data.decode('utf-8', errors="backslashreplace")
-
-        # spliting data by line by line
-        data = data.split('\n')
-
-        # creating a list of profiles
-        profiles = []
-
-        # traverse the data
-        for i in data:
-
-            # find "All User Profile" in each item
-            if "All User Profile" in i:
-                # if found
-                # split the item
-                i = i.split(":")
-
-                # item at index 1 will be the wifi name
-                i = i[1]
-
-                # formatting the name
-                # first and last chracter is use less
-                i = i[1:-1]
-
-                # appending the wifi name in the list
-                profiles.append(i)
-
-                # printing heading
-        print("{:<30}| {:<}".format("Wi-Fi Name", "Password"))
-        print("----------------------------------------------")
-
-        # traversing the profiles
+        data = subprocess.check_output(['netsh', 'wlan', 'show', 'profiles']).decode('utf-8').split('\n')
+        profiles = [i.split(":")[1][1:-1] for i in data if "All User Profile" in i]
         for i in profiles:
+            results = subprocess.check_output(['netsh', 'wlan', 'show', 'profile', i, 'key=clear']).decode(
+                'utf-8').split('\n')
+            results = [b.split(":")[1][1:-1] for b in results if "Key Content" in b]
+            wifi_keys[i] = results
 
-            # try catch block beigins
-            # try block
-            try:
-                # getting meta data with password using wifi name
-                results = subprocess.check_output(['netsh', 'wlan', 'show', 'profile', i, 'key = clear'])
-
-                # decoding and splitting data line by line
-                results = results.decode('utf-8', errors="backslashreplace")
-                results = results.split('\n')
-
-                # finding password from the result list
-                results = [b.split(":")[1][1:-1] for b in results if "Key Content" in b]
-
-                # if there is passowrd it will print the pass word
-                try:
-                    print("{:<30}| {:<}".format(i, results[0]))
-
-                    # else it will print blank in fornt of pass word
-                except IndexError:
-                    print("{:<30}| {:<}".format(i, ""))
-
-                    # called when this process get failed
-            except subprocess.CalledProcessError:
-                print("Encoding Error Occured")
     except Exception:
         return "None"
+
+    return wifi_keys
+
+
+def computer_name():
+    c = wmi.WMI()
+    my_system = c.Win32_ComputerSystem()[0]
+
+    return my_system.Model
+
+
+def computer_manufacturer():
+    c = wmi.WMI()
+    my_system = c.Win32_ComputerSystem()[0]
+
+    return my_system.Manufacturer
+
+
+def print_wifi(wifi_keys, f):
+    for key, value in wifi_keys.items():
+        f.write("{}: {}\n".format(key, value).replace("[", "").replace("]", ""))
+
 
 def write_to_file():
     with open('computer_info.txt', 'w+') as f:
+        f.write("Computer Name--------------\n")
+        f.write("Model: {} \n".format(computer_name()))
+        f.write("{} Service Tag: {} \n".format(computer_manufacturer(), get_service_tag()))
+        f.write("\nComputer Specifications--------------\n")
         f.write("User: {} \n".format(getpass.getuser()))
         f.write("CPU: {} \n".format(get_cpu()))
         f.write("RAM: {} \n".format(get_ram()))
@@ -264,19 +183,18 @@ def write_to_file():
         f.write("OS: {} \n".format(get_os()))
         f.write("Windows Key: {} \n".format(get_windows_key()))
         f.write("GPU: {} \n".format(get_gpu()))
-        #Motherboard Serial, Name, Brand
+        # Motherboard Serial, Name, Brand
         f.write("\nMotherboard--------------\n")
         f.write("\tBrand: {} \n".format(get_motherboard_serial()[2]))
         f.write("\tName: {} \n".format(get_motherboard_serial()[1]))
         f.write("\tSerial: {} \n".format(get_motherboard_serial()[0]))
         f.write("\n")
         f.write("Wifi Information: \n")
-        f.write("Wifi: {}".format(get_wifi()))
+        f.write("Wifi: {}".format(print_wifi(get_wifi(), f)))
         f.write("\n\n")
-        f.write("Dell Service Tag: {} \n".format(get_dell_servicetag()))
-    os.startfile('computer_info.txt')
+
+
 
 
 write_to_file()
-
-
+os.startfile('computer_info.txt')
