@@ -54,9 +54,9 @@ def get_gpu():
         if gpu != '':
             return gpu
         else:
-            return None
+            return "No GPU found"
     except AttributeError:
-        return None
+        return "AttributeError from getting gpu"
     # gpus = GPUtil.getGPUs()
     # list_gpus = []
     # for gpu in gpus:
@@ -74,7 +74,10 @@ def get_os():
 
 
 def get_cpu():
-    return cpuinfo.get_cpu_info()['brand_raw']
+    if cpuinfo.get_cpu_info()['brand_raw']:
+        return cpuinfo.get_cpu_info()['brand_raw']
+    else:
+        return "Error getting cpu"
 
 
 def get_motherboard_serial():
@@ -102,7 +105,7 @@ def get_motherboard_serial():
 
         # output machine serial code: XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXX
     except Exception:
-        return "None"
+        return "Exception thrown getting Motherboard serial"
 
 
 def get_service_tag():
@@ -112,7 +115,7 @@ def get_service_tag():
         for info in bios_info:
             return info.SerialNumber
     except Exception:
-        return "None"
+        return "Error getting service tag"
 
 
 def get_windows_product_key_from_wmi():
@@ -122,16 +125,16 @@ def get_windows_product_key_from_wmi():
         if product_key != '':
             return product_key
         else:
-            return None
+            return "Error getting windows key from wmi"
     except AttributeError:
-        return None
+        return "AttributeError from getting windows key from wmi"
 
 
 def get_windows_key():
     try:
         return get_windows_product_key_from_wmi()
     except Exception:
-        return "None"
+        return "Error getting windows key"
 
 
 def get_wifi():
@@ -192,8 +195,6 @@ def write_to_file():
         f.write("Wifi Information: \n")
         f.write("Wifi: {}".format(print_wifi(get_wifi(), f)))
         f.write("\n\n")
-
-
 
 
 write_to_file()
